@@ -1,4 +1,9 @@
 {
+  "name": "live-location-tracker",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "ws": "^8.18.1"
   }
