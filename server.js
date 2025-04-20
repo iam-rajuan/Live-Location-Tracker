@@ -1,46 +1,55 @@
 const WebSocket = require('ws');
 const http = require('http');
 
-// Create HTTP server with CORS and health check
 const server = http.createServer((req, res) => {
-  // Set CORS headers
-  res.setHeader('Access-Control-Allow-Origin', 'https://68053a953d49e78c540773f1--livelocationtrackertest.netlify.app');
+  // Enhanced CORS for development/production
+  const allowedOrigins = [
+    'https://68053a953d49e78c540773f1--livelocationtrackertest.netlify.app',
+    'http://localhost:3000' // For local testing
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    res.end();
+    res.writeHead(204).end();
     return;
   }
 
-  // Health check endpoint
   if (req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('OK');
+    res.writeHead(200, { 'Content-Type': 'text/plain' }).end('OK');
     return;
   }
 
-  // All other requests
-  res.writeHead(404);
-  res.end();
+  res.writeHead(404).end();
 });
 
-// WebSocket Server
-const wss = new WebSocket.Server({ server });
+// WebSocket Server with connection timeout
+const wss = new WebSocket.Server({
+  server,
+  clientTracking: true,
+  perMessageDeflate: true // Reduce bandwidth
+});
 
 const users = new Map();
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   const userId = Math.random().toString(36).substring(2, 9);
+  const ip = req.socket.remoteAddress;
+  
   users.set(userId, { 
     ws, 
+    ip,
     location: null, 
     lastActive: Date.now() 
   });
 
-  console.log(`User ${userId} connected`);
+  console.log(`User ${userId} connected from ${ip}`);
 
   ws.on('message', (message) => {
     try {
@@ -49,14 +58,18 @@ wss.on('connection', (ws) => {
         users.get(userId).location = { 
           lng: data.lng, 
           lat: data.lat,
-          accuracy: data.accuracy || null
+          accuracy: data.accuracy || 0
         };
         users.get(userId).lastActive = Date.now();
         broadcastLocations();
       }
     } catch (error) {
-      console.error('Message parse error:', error);
+      console.error(`User ${userId} send invalid data:`, error.message);
     }
+  });
+
+  ws.on('pong', () => {
+    users.get(userId).lastActive = Date.now();
   });
 
   ws.on('close', () => {
@@ -66,17 +79,19 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Clean inactive connections every 2 minutes
+// Heartbeat and cleanup
 setInterval(() => {
   const now = Date.now();
-  users.forEach((user, userId) => {
-    if (now - user.lastActive > 120000) { // 2 minutes
-      user.ws.terminate();
-      users.delete(userId);
+  wss.clients.forEach((client) => {
+    const userId = [...users.entries()].find(([_, u]) => u.ws === client)?.[0];
+    if (now - users.get(userId)?.lastActive > 120000) {
+      client.terminate();
       console.log(`User ${userId} timed out`);
+    } else if (client.readyState === WebSocket.OPEN) {
+      client.ping();
     }
   });
-}, 60000);
+}, 30000); // Check every 30 seconds
 
 function broadcastLocations() {
   const activeUsers = Array.from(users.entries())
@@ -85,15 +100,16 @@ function broadcastLocations() {
       id,
       lng: user.location.lng,
       lat: user.location.lat,
-      accuracy: user.location.accuracy
+      accuracy: user.location.accuracy,
+      lastUpdate: user.lastActive
     }));
 
-  users.forEach(user => {
-    if (user.ws.readyState === WebSocket.OPEN) {
-      user.ws.send(JSON.stringify({
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({
         type: 'user_locations',
         users: activeUsers,
-        timestamp: Date.now()
+        serverTime: Date.now()
       }));
     }
   });
@@ -101,8 +117,8 @@ function broadcastLocations() {
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`WebSocket: wss://live-location-tracker-test-lup.railway.app`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🔌 WebSocket: wss://live-location-tracker-test-lup.railway.app`);
 });
 // const WebSocket = require('ws');
 // const http = require('http');
