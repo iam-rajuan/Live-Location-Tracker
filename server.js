@@ -1,42 +1,44 @@
 const WebSocket = require('ws');
 const http = require('http');
 
-
-const { parse } = require('url');
-
-// Modify the HTTP server creation:
+// Create HTTP server with CORS and health check
 const server = http.createServer((req, res) => {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', 'https://68053a953d49e78c540773f1--livelocationtrackertest.netlify.app');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
     return;
   }
 
-
-  
-// Create HTTP server with health check
-const server = http.createServer((req, res) => {
+  // Health check endpoint
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('OK');
     return;
   }
+
+  // All other requests
   res.writeHead(404);
   res.end();
 });
 
 // WebSocket Server
-const wss = new WebSocket.Server({ server, path: '/' });
+const wss = new WebSocket.Server({ server });
 
 const users = new Map();
 
 wss.on('connection', (ws) => {
   const userId = Math.random().toString(36).substring(2, 9);
-  users.set(userId, { ws, location: null, lastActive: Date.now() });
+  users.set(userId, { 
+    ws, 
+    location: null, 
+    lastActive: Date.now() 
+  });
 
   console.log(`User ${userId} connected`);
 
@@ -102,7 +104,6 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`WebSocket: wss://live-location-tracker-test-lup.railway.app`);
 });
-
 // const WebSocket = require('ws');
 // const http = require('http');
 
