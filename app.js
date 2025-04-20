@@ -8,8 +8,20 @@ const map = new mapboxgl.Map({
 });
 
 let userMarker = null;
-const socket = new WebSocket('ws://localhost:8080'); // Connects to our Node.js server
+// const socket = new WebSocket('wss://live-location-tracker-test-1.up.railway.app'); // Connects to our Node.js server
+const socket = new WebSocket('wss://live-location-tracker-test-1.up.railway.app');
 
+// Connection status indicators
+socket.onopen = () => {
+    console.log('WebSocket connected');
+    document.body.style.border = '5px solid green';
+};
+
+socket.onclose = () => {
+    console.log('WebSocket disconnected');
+    document.body.style.border = '5px solid red';
+    setTimeout(() => location.reload(), 5000); // Reconnect after 5 seconds
+};
 // Start tracking user's location
 if (navigator.geolocation) {
     navigator.geolocation.watchPosition(
