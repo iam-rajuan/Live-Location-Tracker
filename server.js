@@ -1,6 +1,23 @@
 const WebSocket = require('ws');
 const http = require('http');
 
+
+const { parse } = require('url');
+
+// Modify the HTTP server creation:
+const server = http.createServer((req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', 'https://68053a953d49e78c540773f1--livelocationtrackertest.netlify.app');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+
+  
 // Create HTTP server with health check
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
